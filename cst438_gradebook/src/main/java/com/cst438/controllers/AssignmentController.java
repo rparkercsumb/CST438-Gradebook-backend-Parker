@@ -55,9 +55,9 @@ public class AssignmentController
       //course must already exist
       Course course  = courseRepository.findById(AssignmentDTO.courseId).orElse(null);
       
-      if (!course.getInstructor().equals(instructorEmail)) {
-         throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Selected course is for a different instructor. " + course.getInstructor());
-      }
+      //if (!course.getInstructor().equals(instructorEmail)) {
+      //   throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Selected course is for a different instructor. " + course.getInstructor());
+      //}
       
       if (assignmentName != null && assignment_due_date != null && course != null)
       {
