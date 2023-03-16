@@ -111,8 +111,6 @@ public class AssignmentController
 
       Assignment assignment = assignmentRepository.findById(assignmentId).orElse(null);
       
-      System.out.println(assignment.getAssignmentGrades().size());
-      
       if (assignment.getAssignmentGrades().size() > 0)
       {
          throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cannot delete: assignment contains grades  " + assignmentId);
