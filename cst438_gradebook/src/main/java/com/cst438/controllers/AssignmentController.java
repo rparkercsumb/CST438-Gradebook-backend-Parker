@@ -3,12 +3,12 @@ package com.cst438.controllers;
 import java.util.ArrayList;
 import java.util.List;
 import java.sql.Date;
-import java.text.SimpleDateFormat;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,22 +26,10 @@ import com.cst438.domain.Course;
 import com.cst438.domain.CourseDTOG;
 import com.cst438.domain.CourseRepository;
 import com.cst438.domain.Enrollment;
-import com.cst438.domain.GradebookDTO;
-import com.cst438.services.RegistrationService;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.server.ResponseStatusException;
-
-import com.cst438.domain.Course;
-import com.cst438.domain.CourseRepository;
-import com.cst438.domain.Enrollment;
 import com.cst438.domain.EnrollmentDTO;
 import com.cst438.domain.EnrollmentRepository;
+import com.cst438.domain.GradebookDTO;
+import com.cst438.services.RegistrationService;
 
 @RestController
 public class AssignmentController
@@ -55,59 +43,100 @@ public class AssignmentController
    //As an instructor for a course , I can add a new assignment for my course.  The assignment has a name and a due date.
    @PostMapping("/assignment")
    @Transactional
-   public AssignmentListDTO.AssignmentDTO addAssignment( @RequestBody CourseDTOG courseDTOG )
+   public AssignmentListDTO.AssignmentDTO addAssignment(@RequestBody AssignmentListDTO.AssignmentDTO AssignmentDTO)
    {
-      //TODO: change to not be hard coded
-      String assignment_name = "test assignment";
-      String dateStr = "2023-06-15";
+      //TODO: instructor email, verify in if statement
+      String instructorEmail = "dwisneski@csumb.edu";
+      
+      String assignmentName = AssignmentDTO.assignmentName;
+      String dateStr = AssignmentDTO.dueDate;
       Date assignment_due_date = Date.valueOf(dateStr);
       
-      Course course  = courseRepository.findById(courseDTOG.course_id).orElse(null);
+      //course must already exist
+      Course course  = courseRepository.findById(AssignmentDTO.courseId).orElse(null);
       
-      if (assignment_name != null && assignment_due_date != null && course != null)
+      if (!course.getInstructor().equals(instructorEmail)) {
+         throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Selected course is for a different instructor. " + course.getInstructor());
+      }
+      
+      if (assignmentName != null && assignment_due_date != null && course != null)
       {
          Assignment assignment = new Assignment();
-         assignment.setName(assignment_name);
-         assignment.setDueDate(assignment_due_date);
          assignment.setCourse(course);
-         assignment.setNeedsGrading(1);
+         assignment.setName(assignmentName);
+         assignment.setDueDate(assignment_due_date);
+         assignment.setNeedsGrading(1); //default to still needs to be graded
          
-         //TODO assignment made, but needs to be added to the database? and return correct AssignmentDTO
+         Assignment savedAssignment =  assignmentRepository.save(assignment);
          
-         return new AssignmentListDTO.AssignmentDTO(assignment.getId(), course.getCourse_id(), assignment_name, dateStr, course.getTitle());
+         //any information need to be sent to registrationService?
+         
+         AssignmentListDTO.AssignmentDTO result = createAssignmentDTO(savedAssignment);
+         return result;
       }
       else
       {
-         throw  new ResponseStatusException( HttpStatus.BAD_REQUEST, "Course_id invalid or assignment name or due date not found.  "+courseDTOG.course_id);
+         throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Course_id invalid or assignment name or due date not found.  " + AssignmentDTO.courseId);
       }
    }
-   // due_date / name / needs_grading / course_id
    
-   
-   
-   
-   //As an instructor, I can change the name of the assignment for my course.
-   //TODO
+   // As an instructor, I can change the name of the assignment for my course.
+   @PutMapping("/assignment/{id}")
+   @Transactional
+   public void changeAssignmentName(@RequestBody AssignmentListDTO.AssignmentDTO AssignmentDTO,
+         @PathVariable("id") Integer assignmentId)
+   {
+      //TODO: instructor email, verify in if statement
+      String instructorEmail = "dwisneski@csumb.edu";
+      
+      Assignment assignment = assignmentRepository.findById(assignmentId).orElse(null);
+      if (assignment == null) {
+         throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Invalid assignmentID. " + assignmentId);
+      }
+      if (!assignment.getCourse().getInstructor().equals(instructorEmail)) {
+         throw new ResponseStatusException( HttpStatus.BAD_REQUEST, "Wrong instructor. " + assignmentId);
+      }
+      
+      assignment.setName(AssignmentDTO.assignmentName);
+      assignmentRepository.save(assignment);
+   }
    
    //As an instructor, I can delete an assignment  for my course (only if there are no grades for the assignment).
-   //TODO
+   @DeleteMapping("/assignment/{assignmentId}")
+   @Transactional
+   public void deleteAssignment(@PathVariable int assignmentId)
+   {
+      //TODO: instructor email, verify in if statement
+      String instructorEmail = "dwisneski@csumb.edu";
 
+      Assignment assignment = assignmentRepository.findById(assignmentId).orElse(null);
+      
+      System.out.println(assignment.getAssignmentGrades().size());
+      
+      if (assignment.getAssignmentGrades().size() > 0)
+      {
+         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cannot delete: assignment contains grades  " + assignmentId);
+      }
+
+      //verify that assignment exists and
+      if (assignment != null && assignment.getCourse().getInstructor().equals(instructorEmail))
+      {
+         assignmentRepository.delete(assignment);
+      } else
+      {
+         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "assignmentId invalid or wrong instructor. " + assignmentId);
+      }
+   }
    
    private AssignmentListDTO.AssignmentDTO createAssignmentDTO(Assignment a)
    {
-      AssignmentListDTO.AssignmentDTO AssignmentDTO = new AssignmentListDTO.AssignmentDTO();
-      Course c = a.getCourse();
-      AssignmentDTO.id =a.getEnrollment_id();
-      AssignmentDTO.building = c.getBuilding();
-      AssignmentDTO.course_id = c.getCourse_id();
-      AssignmentDTO.endDate = c.getEnd().toString();
-      AssignmentDTO.instructor = c.getInstructor();
-      AssignmentDTO.room = c.getRoom();
-      AssignmentDTO.section = c.getSection();
-      AssignmentDTO.startDate = c.getStart().toString();
-      AssignmentDTO.times = c.getTimes();
-      AssignmentDTO.title = c.getTitle();
-      AssignmentDTO.grade = a.getCourseGrade();
+      AssignmentListDTO.AssignmentDTO AssignmentDTO = new AssignmentListDTO.AssignmentDTO(
+               a.getId(), 
+               a.getCourse().getCourse_id(), 
+               a.getName(), 
+               a.getDueDate().toString(), 
+               a.getCourse().getTitle());
+
       return AssignmentDTO;
    }
 }
